@@ -18,14 +18,55 @@ Widget heading(String eye,String name)=>Padding(padding:const EdgeInsets.fromLTR
  const SizedBox(height:17),Text(name,style:const TextStyle(color:white,fontSize:30,fontWeight:FontWeight.w800,letterSpacing:-.7))]));
 Widget title(String t,String hint)=>Padding(padding:const EdgeInsets.fromLTRB(20,28,20,14),child:Row(children:[Expanded(child:Text(t,style:const TextStyle(color:white,fontSize:21,fontWeight:FontWeight.bold))),Text(hint,style:const TextStyle(color:muted,fontSize:11))]));
 Widget picture(String url)=>Image.network(url,fit:BoxFit.cover,errorBuilder:(c,e,s)=>Container(decoration:const BoxDecoration(gradient:LinearGradient(colors:[Color(0xff46543f),Color(0xff181c23)],begin:Alignment.topLeft,end:Alignment.bottomRight)),child:const Center(child:Icon(Icons.spa,color:lime,size:58))));
-Widget feature(String label,String text,String sub,String img,VoidCallback tap,{double height=280})=>pad(GestureDetector(onTap:tap,child:ClipRRect(borderRadius:BorderRadius.circular(22),child:SizedBox(height:height,child:Stack(fit:StackFit.expand,children:[
- picture(img),const DecoratedBox(decoration:BoxDecoration(gradient:LinearGradient(colors:[Colors.transparent,Color(0xee050707)],begin:Alignment.topCenter,end:Alignment.bottomCenter))),
- Positioned(bottom:20,left:20,right:20,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
- Text(label,style:const TextStyle(color:lime,letterSpacing:2,fontSize:10,fontWeight:FontWeight.bold)),const SizedBox(height:8),
- Text(text,style:const TextStyle(color:white,fontSize:26,fontWeight:FontWeight.w800)),const SizedBox(height:7),
- Text(sub,style:const TextStyle(color:Color(0xffe5e5df),fontSize:13)),const SizedBox(height:12),
- const Row(children:[Text('EXPLORAR',style:TextStyle(color:lime,fontSize:11,letterSpacing:1.5,fontWeight:FontWeight.bold)),SizedBox(width:8),Icon(Icons.arrow_forward,color:lime,size:16)])])]))
- ]))))));
+Widget feature(String label, String text, String sub, String img, VoidCallback tap, {double height = 280}) {
+  return pad(
+    GestureDetector(
+      onTap: tap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: SizedBox(
+          height: height,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              picture(img),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.transparent, Color(0xee050707)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 20,
+                right: 20,
+                bottom: 20,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: const TextStyle(color: lime, letterSpacing: 2, fontSize: 10, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text(text, style: const TextStyle(color: white, fontSize: 26, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 7),
+                    Text(sub, style: const TextStyle(color: Color(0xffe5e5df), fontSize: 13)),
+                    const SizedBox(height: 12),
+                    const Row(children: [
+                      Text('EXPLORAR', style: TextStyle(color: lime, fontSize: 11, letterSpacing: 1.5, fontWeight: FontWeight.bold)),
+                      SizedBox(width: 8),
+                      Icon(Icons.arrow_forward, color: lime, size: 16),
+                    ]),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
 Widget metric(String label,String val,IconData icon)=>tile(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(icon,color:lime),const SizedBox(height:15),Text(val,style:const TextStyle(color:white,fontSize:23,fontWeight:FontWeight.bold)),const SizedBox(height:5),Text(label,style:const TextStyle(color:muted,fontSize:10,letterSpacing:1))]));
 Widget action(String label,String note,String button,IconData icon,VoidCallback press)=>tile(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
  Icon(icon,color:lime,size:28),const SizedBox(height:13),Text(label,style:const TextStyle(fontSize:18,color:white,fontWeight:FontWeight.bold)),const SizedBox(height:8),
@@ -123,7 +164,16 @@ class _SomaState extends State<Soma>{
  pad(tile(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
  Text(water.toString()+' / '+goal.toString()+' ml',style:const TextStyle(color:white,fontSize:28,fontWeight:FontWeight.bold)),
  const SizedBox(height:14),LinearProgressIndicator(value:(water/max(1,goal)).clamp(0.0,1.0),minHeight:7,color:lime,backgroundColor:const Color(0xff3b4142)),
- const SizedBox(height:16),Row(children:[150,250,500].map((x)=>Expanded(child:Padding(padding:const EdgeInsets.only(right:5),child:OutlinedButton(onPressed:()=>update(()=>water+=x),child:Text('+'+x.toString(),style:const TextStyle(fontSize:12))))).toList()),
+ const SizedBox(height:16),
+ Row(children: [150, 250, 500].map((x) {
+   return Expanded(child: Padding(
+     padding: const EdgeInsets.only(right: 5),
+     child: OutlinedButton(
+       onPressed: () => update(() => water += x),
+       child: Text('+' + x.toString(), style: const TextStyle(fontSize: 12)),
+     ),
+   ));
+ }).toList()),
  TextButton(onPressed:()=>askNumber('Meta diária de água','Mililitros',(x)=>update(()=>goal=x.round())),child:const Text('Alterar meta'))
  ]))),
  title('Sono','Última noite'),
