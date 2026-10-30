@@ -38,25 +38,25 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
       - name: Name APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk SOMA-Android-v0.1.0.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk SOMA-Android-v0.2.0.apk
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SOMA-Android-0.1.0
-          path: SOMA-Android-v0.1.0.apk
+          name: SOMA-Android-0.2.0
+          path: SOMA-Android-v0.2.0.apk
       - name: Publish prerelease
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.0
+          tag_name: v0.2.0
           target_commitish: main
-          name: SŌMA Android v0.1.0 - Preview
+          name: SŌMA Android v0.2.0 - Beta
           prerelease: true
           generate_release_notes: true
           body: |
             Preview experimental e independente do ecossistema Vista.
-            Inclui treinos guiados, registo de agua, alimentacao manual,
+            Inclui onboarding, biblioteca alimentar offline, fotografias de refeicoes, historico de sono, humor e treino, registo de agua, alimentacao manual,
             sono, humor, glicemia manual, peso e IMC.
             A IA por fotografia ainda nao esta implementada.
             Os registos ficam no dispositivo e ainda nao possuem cifragem clinica.
             Esta APK nao se destina a diagnostico ou tratamento.
-          files: SOMA-Android-v0.1.0.apk
+          files: SOMA-Android-v0.2.0.apk
