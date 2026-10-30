@@ -395,5 +395,5 @@ class _SetupPageState extends State<SetupPage>{
   FilledButton(onPressed:()=>widget.onSave(objective,place,level),child:const Text('Começar')),
   const SizedBox(height:12),
   const Text('Os treinos são exemplos iniciais, não prescrição médica personalizada.',style:TextStyle(color:muted,fontSize:12))
- ]))));
+ ])));
 }
