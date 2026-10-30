@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'food_library.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -75,7 +78,8 @@ Widget action(String label,String note,String button,IconData icon,VoidCallback 
 class Soma extends StatefulWidget{const Soma({super.key});@override State<Soma> createState()=>_SomaState();}
 class _SomaState extends State<Soma>{
  int tab=0,water=0,sessions=0,goal=2000;double sleep=7.5,weight=75,height=175;String mood='Bem';bool loaded=false;
- List<Map<String,dynamic>> meals=[],glucose=[],weights=[];
+ List<Map<String,dynamic>> meals=[],glucose=[],weights=[],workouts=[],moods=[],sleeps=[];
+ String objective='Saúde e energia',trainingPlace='Em casa',experience='Iniciante';bool configured=false;
  @override void initState(){super.initState();load();}
  Future<void> load()async{
   try{final p=await SharedPreferences.getInstance();final m=jsonDecode(p.getString('soma_v1')??'{}') as Map<String,dynamic>;
@@ -86,19 +90,63 @@ class _SomaState extends State<Soma>{
     meals=(m['meals'] as List? ??[]).map((e)=>Map<String,dynamic>.from(e as Map)).toList();
     glucose=(m['glucose'] as List? ??[]).map((e)=>Map<String,dynamic>.from(e as Map)).toList();
     weights=(m['weights'] as List? ??[]).map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+    workouts=(m['workouts'] as List? ??[]).map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+    moods=(m['moods'] as List? ??[]).map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+    sleeps=(m['sleeps'] as List? ??[]).map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+    objective=m['objective'] as String? ??'Saúde e energia';
+    trainingPlace=m['trainingPlace'] as String? ??'Em casa';
+    experience=m['experience'] as String? ??'Iniciante';
+    configured=m['configured']==true;
   });}catch(_){}
   if(mounted)setState(()=>loaded=true);
  }
  void update(VoidCallback fn){setState(fn);persist();}
  Future<void> persist()async{final p=await SharedPreferences.getInstance();await p.setString('soma_v1',jsonEncode({
  'water':water,'day':date(),'goal':goal,'sleep':sleep,'weight':weight,'height':height,
- 'sessions':sessions,'mood':mood,'meals':meals,'glucose':glucose,'weights':weights}));}
+ 'sessions':sessions,'mood':mood,'meals':meals,'glucose':glucose,'weights':weights,
+ 'workouts':workouts,'moods':moods,'sleeps':sleeps,'objective':objective,
+ 'trainingPlace':trainingPlace,'experience':experience,'configured':configured}));}
  Future<void> askNumber(String label,String hint,void Function(double) save)async{
   final c=TextEditingController();
   final n=await showDialog<double>(context:context,builder:(d)=>AlertDialog(backgroundColor:panel,title:Text(label),content:TextField(controller:c,autofocus:true,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(hintText:hint)),actions:[
    TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Cancelar')),
    FilledButton(onPressed:()=>Navigator.pop(d,double.tryParse(c.text.replaceAll(',','.'))),child:const Text('Guardar'))]));
   c.dispose();if(n!=null&&n.isFinite&&n>0&&mounted)save(n);
+ }
+
+ void registerFood(FoodPortion food){
+  update(()=>meals.insert(0,{'name':food.name,'cal':food.kcal,
+    'prot':food.protein,'carb':food.carbs,'fat':food.fats,'sugar':food.sugar,
+    'day':date(),'source':'offline','time':DateTime.now().toIso8601String()}));
+ }
+ Future<void> chooseFood()async{
+  final food=await Navigator.push<FoodPortion>(context,MaterialPageRoute(builder:(_)=>const FoodPicker()));
+  if(food!=null) registerFood(food);
+ }
+ void removeMeal(Map<String,dynamic> entry){
+  final path=entry['imagePath'] as String?;
+  update(()=>meals.remove(entry));
+  if(path!=null) File(path).delete().catchError((Object _) => File(path));
+ }
+ void recordMood(String answer){
+  update((){
+   mood=answer;
+   moods.removeWhere((m)=>m['day']==date());
+   moods.insert(0,{'day':date(),'value':answer});
+  });
+ }
+ void recordSleep(double hours){
+  update((){
+   sleep=hours;
+   sleeps.removeWhere((m)=>m['day']==date());
+   sleeps.insert(0,{'day':date(),'hours':hours});
+  });
+ }
+ void recordWorkout(String kind){
+  update((){
+   sessions++;
+   workouts.insert(0,{'name':kind,'day':date(),'time':DateTime.now().toIso8601String()});
+  });
  }
  Future<void> addMeal()async{
   final name=TextEditingController(),cal=TextEditingController(),prot=TextEditingController(),carb=TextEditingController(),fat=TextEditingController(),sugar=TextEditingController();
@@ -114,26 +162,50 @@ class _SomaState extends State<Soma>{
    const SizedBox(height:14),SizedBox(width:double.infinity,child:FilledButton(onPressed:(){
     if(name.text.trim().isEmpty)return;
     double n(TextEditingController c)=>max(0,double.tryParse(c.text.replaceAll(',','.'))??0);
-    Navigator.pop(ctx,{'name':name.text.trim(),'cal':n(cal),'prot':n(prot),'carb':n(carb),'fat':n(fat),'sugar':n(sugar),'day':date()});}
+    Navigator.pop(ctx,{'name':name.text.trim(),'cal':n(cal),'prot':n(prot),'carb':n(carb),'fat':n(fat),'sugar':n(sugar),'day':date(),'photo':image?.path});}
     ,child:const Text('Adicionar ao diário'))),
   ])))));
   for(final c in [name,cal,prot,carb,fat,sugar]){c.dispose();}
-  if(entry!=null)update(()=>meals.insert(0,entry));
+  if(entry!=null){
+   final imagePath=entry.remove('photo') as String?;
+   if(imagePath!=null){
+    try{
+     final root=await getApplicationDocumentsDirectory();
+     final dir=Directory(root.path+'/meal_photos');await dir.create(recursive:true);
+     final copy=await File(imagePath).copy(dir.path+'/meal_'+DateTime.now().microsecondsSinceEpoch.toString()+'.jpg');
+     entry['imagePath']=copy.path;
+    }catch(_){ /* Keep the nutrition data if photo storage fails. */ }
+   }
+   update(()=>meals.insert(0,entry));
+  }
  }
  Widget input(TextEditingController c,String label,{bool num=false})=>Padding(padding:const EdgeInsets.only(bottom:10),child:TextField(controller:c,keyboardType:num?const TextInputType.numberWithOptions(decimal:true):TextInputType.text,decoration:InputDecoration(labelText:label,filled:true,fillColor:const Color(0xff2b3032),border:OutlineInputBorder(borderRadius:BorderRadius.circular(11),borderSide:BorderSide.none))));
  void aiInfo()=>showModalBottomSheet<void>(context:context,backgroundColor:panel,showDragHandle:true,builder:(c)=>Padding(padding:const EdgeInsets.all(24),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
  const Icon(Icons.auto_awesome,color:lime,size:35),const SizedBox(height:14),
  const Text('Scanner nutricional',style:TextStyle(fontSize:24,fontWeight:FontWeight.bold,color:white)),const SizedBox(height:10),
- const Text('A integração com ChatGPT e a identificação automática dos alimentos ainda não estão disponíveis na v0.1. Esta versão oferece registo manual, sem inventar resultados de IA.',style:TextStyle(color:muted,height:1.5)),
+ const Text('A integração com ChatGPT e a identificação automática dos alimentos ainda não estão disponíveis nesta versão. Esta versão oferece registo manual, sem inventar resultados de IA.',style:TextStyle(color:muted,height:1.5)),
  const SizedBox(height:20),SizedBox(width:double.infinity,child:FilledButton(onPressed:(){Navigator.pop(c);addMeal();},child:const Text('Registar manualmente'))),const SizedBox(height:12)])));
- @override Widget build(BuildContext context)=>MaterialApp(title:'SŌMA',debugShowCheckedModeBanner:false,theme:ThemeData(useMaterial3:true,brightness:Brightness.dark,scaffoldBackgroundColor:bg,colorScheme:ColorScheme.fromSeed(seedColor:lime,brightness:Brightness.dark),filledButtonTheme:FilledButtonThemeData(style:FilledButton.styleFrom(backgroundColor:lime,foregroundColor:bg,minimumSize:const Size(10,48)))),home:Scaffold(
- body:SafeArea(child:!loaded?const Center(child:CircularProgressIndicator()):IndexedStack(index:tab,children:[todayPage(),nutritionPage(),TrainingPage(done:()=>update(()=>sessions++)),healthPage(),progressPage()])),
- bottomNavigationBar:SafeArea(top:false,child:Container(height:70,decoration:const BoxDecoration(color:Color(0xff191c1f),border:Border(top:BorderSide(color:Color(0xff363a3a)))),child:Row(children:[
- nav(0,Icons.home_outlined,'Hoje'),nav(1,Icons.restaurant_outlined,'Nutrição'),nav(2,Icons.fitness_center,'Treinar'),nav(3,Icons.favorite_border,'Saúde'),nav(4,Icons.auto_graph,'Evolução')])))));
+ @override Widget build(BuildContext context)=>MaterialApp(title:'SŌMA',debugShowCheckedModeBanner:false,theme:ThemeData(useMaterial3:true,brightness:Brightness.dark,scaffoldBackgroundColor:bg,colorScheme:ColorScheme.fromSeed(seedColor:lime,brightness:Brightness.dark),filledButtonTheme:FilledButtonThemeData(style:FilledButton.styleFrom(backgroundColor:lime,foregroundColor:bg,minimumSize:const Size(10,48)))),home:!loaded?const Scaffold(body:Center(child:CircularProgressIndicator())):
+ !configured?SetupPage(onSave:(g,p,e)=>update((){
+  objective=g;trainingPlace=p;experience=e;configured=true;
+ })):
+ Scaffold(
+  body:SafeArea(child:IndexedStack(index:tab,children:[
+    todayPage(),nutritionPage(),
+    TrainingPage(initialHome:trainingPlace=='Em casa',done:(name)=>recordWorkout(name)),
+    healthPage(),progressPage()])),
+  bottomNavigationBar:SafeArea(top:false,child:Container(height:70,
+   decoration:const BoxDecoration(color:Color(0xff191c1f),border:Border(top:BorderSide(color:Color(0xff363a3a)))),
+   child:Row(children:[nav(0,Icons.home_outlined,'Hoje'),
+    nav(1,Icons.restaurant_outlined,'Nutrição'),
+    nav(2,Icons.fitness_center,'Treinar'),nav(3,Icons.favorite_border,'Saúde'),
+    nav(4,Icons.auto_graph,'Evolução')])))));
  Widget nav(int n,IconData icon,String label)=>Expanded(child:InkWell(onTap:()=>setState(()=>tab=n),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
  Icon(icon,color:tab==n?lime:muted,size:24),const SizedBox(height:5),Text(label,style:TextStyle(color:tab==n?white:muted,fontSize:10,fontWeight:tab==n?FontWeight.bold:FontWeight.normal))])));
  Widget todayPage()=>ListView(children:[
  heading('A TUA ROTINA','Cuida de ti, todos os dias.'),
+ pad(Text('Objetivo: '+objective+'  •  '+experience,style:const TextStyle(color:muted))),
+ const SizedBox(height:16),
  feature('HOJE É DIA DE MOVIMENTO','Constrói a tua melhor versão','Plano guiado de força e condicionamento','https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=900',()=>setState(()=>tab=2)),
  title('A tua rotina','Registos de hoje'),
  pad(Row(children:[Expanded(child:metric('ÁGUA',water.toString()+' ml',Icons.water_drop_outlined)),const SizedBox(width:10),Expanded(child:metric('SONO',sleep.toStringAsFixed(1)+' h',Icons.nightlight_outlined))])),
@@ -153,8 +225,26 @@ class _SomaState extends State<Soma>{
  title('Hoje','Registos manuais'),
  pad(Wrap(spacing:10,runSpacing:10,children:[metric('ENERGIA',sum('cal').round().toString()+' kcal',Icons.local_fire_department_outlined),metric('PROTEÍNA',sum('prot').toStringAsFixed(1)+' g',Icons.egg_outlined)])),
  title('Refeições',t.length.toString()+' registadas'),
+ pad(FilledButton.icon(onPressed:chooseFood,icon:const Icon(Icons.search),label:const Text('Escolher alimento e porção'))),
+ const SizedBox(height:12),
  if(t.isEmpty)pad(action('Ainda não registaste refeições','Adiciona os ingredientes e as quantidades manualmente.','Adicionar',Icons.restaurant,addMeal)),
- ...t.map((m)=>Padding(padding:const EdgeInsets.fromLTRB(20,0,20,9),child:tile(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(m['name'].toString(),style:const TextStyle(color:white,fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:5),Text(value(m['cal']).round().toString()+' kcal • '+value(m['prot']).toStringAsFixed(1)+' g proteína',style:const TextStyle(color:muted))])))),
+ ...t.map((m)=>Padding(padding:const EdgeInsets.fromLTRB(20,0,20,9),
+ child:tile(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+  if(m['imagePath'] is String && File(m['imagePath'] as String).existsSync())
+    ClipRRect(borderRadius:BorderRadius.circular(12),
+      child:Image.file(File(m['imagePath'] as String),height:150,width:double.infinity,fit:BoxFit.cover)),
+  Row(children:[
+   Expanded(child:Text(m['name'].toString(),style:const TextStyle(color:white,fontSize:17,fontWeight:FontWeight.bold))),
+   IconButton(tooltip:'Apagar refeição',onPressed:()=>showDialog<void>(context:context,
+     builder:(dialog)=>AlertDialog(title:const Text('Apagar refeição?'),actions:[
+      TextButton(onPressed:()=>Navigator.pop(dialog),child:const Text('Cancelar')),
+      FilledButton(onPressed:(){Navigator.pop(dialog);removeMeal(m);},child:const Text('Apagar'))])),
+     icon:const Icon(Icons.delete_outline,color:muted))
+  ]),
+  const SizedBox(height:5),
+  Text(value(m['cal']).round().toString()+' kcal • '+value(m['prot']).toStringAsFixed(1)+' g proteína',
+   style:const TextStyle(color:muted)),
+ ])))),
  const SizedBox(height:12),pad(action('Scanner com fotografia','A versão atual não interpreta automaticamente os alimentos.','Abrir',Icons.camera_alt_outlined,aiInfo)),const SizedBox(height:32)]);
  }
  Widget healthPage()=>ListView(children:[
@@ -177,11 +267,25 @@ class _SomaState extends State<Soma>{
  TextButton(onPressed:()=>askNumber('Meta diária de água','Mililitros',(x)=>update(()=>goal=x.round())),child:const Text('Alterar meta'))
  ]))),
  title('Sono','Última noite'),
- pad(tile(Column(children:[Text(sleep.toStringAsFixed(1)+' horas',style:const TextStyle(color:white,fontSize:22)),Slider(value:sleep.clamp(3,12),min:3,max:12,divisions:18,onChanged:(x)=>update(()=>sleep=x))]))),
+ pad(tile(Column(children:[Text(sleep.toStringAsFixed(1)+' horas',style:const TextStyle(color:white,fontSize:22)),Slider(value:sleep.clamp(3,12),min:3,max:12,divisions:18,onChanged:(x)=>setState(()=>sleep=x),onChangeEnd:recordSleep)]))),
  title('Como te sentes?','Registo de humor'),
- pad(Wrap(spacing:7,runSpacing:6,children:['Muito bem','Bem','Cansado','Ansioso','Triste'].map((m)=>ChoiceChip(label:Text(m),selected:mood==m,onSelected:(_)=>update(()=>mood=m))).toList())),
+ pad(Wrap(spacing:7,runSpacing:6,children:['Muito bem','Bem','Cansado','Ansioso','Triste'].map((m)=>ChoiceChip(label:Text(m),selected:mood==m,onSelected:(_)=>recordMood(m))).toList())),
  const SizedBox(height:16),
  pad(action('Respiração guiada','Uma pausa de um minuto para relaxar.','Começar',Icons.spa_outlined,()=>Navigator.of(context).push(MaterialPageRoute(builder:(c)=>const BreathPage())))),
+ if(sleeps.isNotEmpty)...[
+ title('Histórico de sono',sleeps.length.toString()+' registos'),
+ ...sleeps.take(7).map((x)=>pad(Padding(padding:const EdgeInsets.only(bottom:8),
+  child:tile(Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+   Text(x['day'].toString(),style:const TextStyle(color:muted)),
+   Text(value(x['hours']).toStringAsFixed(1)+' h',style:const TextStyle(color:white))]))))),
+ ],
+ if(moods.isNotEmpty)...[
+ title('Histórico emocional',moods.length.toString()+' registos'),
+ ...moods.take(5).map((x)=>pad(Padding(padding:const EdgeInsets.only(bottom:8),
+  child:tile(Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+   Text(x['day'].toString(),style:const TextStyle(color:muted)),
+   Text(x['value'].toString(),style:const TextStyle(color:white))]))))),
+ ],
  title('Glicemia','Medição por dispositivo externo'),
  pad(action('Registar glicemia',glucose.isEmpty?'Ainda sem registos':'Último: '+value(glucose.first['v']).toStringAsFixed(1)+' mg/dL','Registar',Icons.bloodtype_outlined,
  ()=>askNumber('Glicemia medida','mg/dL',(n)=>update(()=>glucose.insert(0,{'v':n,'day':date()}))))),
@@ -198,13 +302,23 @@ class _SomaState extends State<Soma>{
  const SizedBox(height:12),
  pad(action('Editar altura',height.toStringAsFixed(0)+' cm','Editar',Icons.height,()=>askNumber('Altura','cm',(n)=>update(()=>height=n)))),
  title('Treinos concluídos','Consistência'),pad(metric('SESSÕES',sessions.toString(),Icons.fitness_center)),
+ if(workouts.isNotEmpty)...[
+ title('Histórico de treinos',workouts.length.toString()+' sessões'),
+ ...workouts.take(8).map((x)=>pad(Padding(padding:const EdgeInsets.only(bottom:8),
+  child:tile(Row(children:[
+   const Icon(Icons.check_circle_outline,color:lime),const SizedBox(width:14),
+   Expanded(child:Text(x['name'].toString(),style:const TextStyle(color:white))),
+   Text(x['day'].toString(),style:const TextStyle(color:muted))
+  ]))))),
+ ],
  title('Histórico de peso',weights.length.toString()+' registos'),
  ...weights.take(10).map((m)=>Padding(padding:const EdgeInsets.fromLTRB(20,0,20,8),child:tile(Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text(value(m['v']).toStringAsFixed(1)+' kg',style:const TextStyle(color:white,fontWeight:FontWeight.bold)),Text(m['day'].toString(),style:const TextStyle(color:muted))])))),
  const SizedBox(height:30)]);}
 }
-class TrainingPage extends StatefulWidget{final VoidCallback done;const TrainingPage({super.key,required this.done});@override State<TrainingPage> createState()=>_TrainingState();}
+class TrainingPage extends StatefulWidget{final ValueChanged<String> done;final bool initialHome;const TrainingPage({super.key,required this.done,required this.initialHome});@override State<TrainingPage> createState()=>_TrainingState();}
 class _TrainingState extends State<TrainingPage>{
  bool home=true,playing=false,rest=false;int index=0,secs=30;Timer? ticker;
+ @override void initState(){super.initState();home=widget.initialHome;}
  final house=['Flexões inclinadas','Remada com mochila','Elevação lateral','Agachamentos','Prancha'];
  final gym=['Puxada alta','Remada baixa','Elevação lateral com halteres','Leg press','Prancha'];
  List<String> get exercises=>home?house:gym;
@@ -217,7 +331,7 @@ class _TrainingState extends State<TrainingPage>{
  if(!rest&&index==exercises.length-1){finish();return;}
  setState((){if(rest){rest=false;index++;secs=30;}else{rest=true;secs=15;}});
  });}
- void finish(){reset();widget.done();ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Treino concluído e registado!')));}
+ void finish(){final name=home?'Circuito casa':'Circuito ginásio';reset();widget.done(name);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Treino concluído e registado!')));}
  @override Widget build(BuildContext context)=>ListView(children:[
  heading('MOVIMENTO','Treina com intenção.'),
  pad(SegmentedButton<bool>(showSelectedIcon:false,segments:const [ButtonSegment(value:true,label:Text('Em casa'),icon:Icon(Icons.home_outlined)),ButtonSegment(value:false,label:Text('Ginásio'),icon:Icon(Icons.fitness_center))],selected:{home},onSelectionChanged:(s){reset();setState(()=>home=s.first);})),
@@ -250,4 +364,36 @@ class _BreathState extends State<BreathPage>{int t=0;Timer? timer;
  const SizedBox(height:42),Text(t%10<4?'Inspira suavemente':'Expira lentamente',style:const TextStyle(color:white,fontSize:23,fontWeight:FontWeight.bold)),
  const SizedBox(height:12),Text((60-t).toString()+' segundos',style:const TextStyle(color:muted)),
  const SizedBox(height:30),TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Terminar'))])));
+}
+
+
+class SetupPage extends StatefulWidget{
+ final void Function(String,String,String) onSave;
+ const SetupPage({super.key,required this.onSave});
+ @override State<SetupPage> createState()=>_SetupPageState();
+}
+class _SetupPageState extends State<SetupPage>{
+ String objective='Saúde e energia',place='Em casa',level='Iniciante';
+ @override Widget build(BuildContext context)=>Scaffold(backgroundColor:bg,
+ body:SafeArea(child:ListView(padding:const EdgeInsets.all(24),children:[
+  const Text('SŌMA',style:TextStyle(color:lime,fontSize:17,letterSpacing:3,fontWeight:FontWeight.w900)),
+  const SizedBox(height:22),
+  const Text('O teu caminho começa aqui.',style:TextStyle(color:white,fontSize:33,fontWeight:FontWeight.bold,height:1.2)),
+  const SizedBox(height:12),
+  const Text('Escolhe uma direção. Podes ajustar os objetivos mais tarde.',style:TextStyle(color:muted)),
+  const SizedBox(height:26),
+  const Text('Objetivo',style:TextStyle(color:white,fontWeight:FontWeight.bold)),
+  ...['Saúde e energia','Shape em V','Ganhar músculos','Perder gordura'].map((x)=>
+   RadioListTile<String>(title:Text(x),value:x,groupValue:objective,onChanged:(v)=>setState(()=>objective=v!))),
+  const SizedBox(height:18),
+  const Text('Onde queres treinar?',style:TextStyle(color:white,fontWeight:FontWeight.bold)),
+  ...['Em casa','Ginásio'].map((x)=>RadioListTile<String>(title:Text(x),value:x,groupValue:place,onChanged:(v)=>setState(()=>place=v!))),
+  const SizedBox(height:18),
+  const Text('Experiência',style:TextStyle(color:white,fontWeight:FontWeight.bold)),
+  ...['Iniciante','Intermédio','Avançado'].map((x)=>RadioListTile<String>(title:Text(x),value:x,groupValue:level,onChanged:(v)=>setState(()=>level=v!))),
+  const SizedBox(height:16),
+  FilledButton(onPressed:()=>widget.onSave(objective,place,level),child:const Text('Começar')),
+  const SizedBox(height:12),
+  const Text('Os treinos são exemplos iniciais, não prescrição médica personalizada.',style:TextStyle(color:muted,fontSize:12))
+ ]))));
 }
