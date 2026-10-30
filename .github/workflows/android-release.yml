@@ -30,6 +30,7 @@ jobs:
               '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET" />')
           path.write_text(data)
           PY
+          rm -f test/widget_test.dart analysis_options.yaml
       - name: Install packages
         run: flutter pub get
       - name: Check Flutter code
