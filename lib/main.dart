@@ -77,6 +77,7 @@ Widget action(String label,String note,String button,IconData icon,VoidCallback 
  TextButton.icon(onPressed:press,label:Text(button.toUpperCase()),icon:const Icon(Icons.arrow_forward),iconAlignment:IconAlignment.end)]));
 class Soma extends StatefulWidget{const Soma({super.key});@override State<Soma> createState()=>_SomaState();}
 class _SomaState extends State<Soma>{
+ final navKey=GlobalKey<NavigatorState>();
  int tab=0,water=0,sessions=0,goal=2000;double sleep=7.5,weight=75,height=175;String mood='Bem';bool loaded=false;
  List<Map<String,dynamic>> meals=[],glucose=[],weights=[],workouts=[],moods=[],sleeps=[];
  String objective='Saúde e energia',trainingPlace='Em casa',experience='Iniciante';bool configured=false;
@@ -108,7 +109,7 @@ class _SomaState extends State<Soma>{
  'trainingPlace':trainingPlace,'experience':experience,'configured':configured}));}
  Future<void> askNumber(String label,String hint,void Function(double) save)async{
   final c=TextEditingController();
-  final n=await showDialog<double>(context:context,builder:(d)=>AlertDialog(backgroundColor:panel,title:Text(label),content:TextField(controller:c,autofocus:true,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(hintText:hint)),actions:[
+  final n=await showDialog<double>(context:navKey.currentContext!,builder:(d)=>AlertDialog(backgroundColor:panel,title:Text(label),content:TextField(controller:c,autofocus:true,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(hintText:hint)),actions:[
    TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Cancelar')),
    FilledButton(onPressed:()=>Navigator.pop(d,double.tryParse(c.text.replaceAll(',','.'))),child:const Text('Guardar'))]));
   c.dispose();if(n!=null&&n.isFinite&&n>0&&mounted)save(n);
@@ -120,7 +121,7 @@ class _SomaState extends State<Soma>{
     'day':date(),'source':'offline','time':DateTime.now().toIso8601String()}));
  }
  Future<void> chooseFood()async{
-  final food=await Navigator.push<FoodPortion>(context,MaterialPageRoute(builder:(_)=>const FoodPicker()));
+  final food=await Navigator.push<FoodPortion>(navKey.currentContext!,MaterialPageRoute(builder:(_)=>const FoodPicker()));
   if(food!=null) registerFood(food);
  }
  void removeMeal(Map<String,dynamic> entry){
@@ -151,11 +152,15 @@ class _SomaState extends State<Soma>{
  Future<void> addMeal()async{
   final name=TextEditingController(),cal=TextEditingController(),prot=TextEditingController(),carb=TextEditingController(),fat=TextEditingController(),sugar=TextEditingController();
   XFile? image;
-  final entry=await showModalBottomSheet<Map<String,dynamic>>(context:context,isScrollControlled:true,backgroundColor:panel,showDragHandle:true,builder:(d)=>StatefulBuilder(builder:(ctx,setSheet)=>Padding(padding:EdgeInsets.fromLTRB(22,8,22,MediaQuery.viewInsetsOf(ctx).bottom+24),child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+  final entry=await showModalBottomSheet<Map<String,dynamic>>(context:navKey.currentContext!,isScrollControlled:true,backgroundColor:panel,showDragHandle:true,builder:(d)=>StatefulBuilder(builder:(ctx,setSheet)=>Padding(padding:EdgeInsets.fromLTRB(22,8,22,MediaQuery.viewInsetsOf(ctx).bottom+24),child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
    const Text('Registar refeição',style:TextStyle(color:white,fontSize:26,fontWeight:FontWeight.bold)),
    const SizedBox(height:8),const Text('A análise por IA ainda não está ligada. Confirma os nutrientes manualmente.',style:TextStyle(color:muted)),
    const SizedBox(height:14),
-   OutlinedButton.icon(onPressed:()async{final p=await ImagePicker().pickImage(source:ImageSource.gallery,imageQuality:75);if(p!=null)setSheet(()=>image=p);},icon:const Icon(Icons.photo_library_outlined),label:Text(image==null?'Selecionar fotografia':'Fotografia selecionada')),
+   Row(children:[
+    Expanded(child:OutlinedButton.icon(onPressed:()async{try{final p=await ImagePicker().pickImage(source:ImageSource.camera,imageQuality:75);if(p!=null)setSheet(()=>image=p);}catch(_){}},icon:const Icon(Icons.camera_alt_outlined),label:const Text('Câmara'))),
+    const SizedBox(width:8),
+    Expanded(child:OutlinedButton.icon(onPressed:()async{try{final p=await ImagePicker().pickImage(source:ImageSource.gallery,imageQuality:75);if(p!=null)setSheet(()=>image=p);}catch(_){}},icon:const Icon(Icons.photo_library_outlined),label:const Text('Galeria'))),
+   ]),
    const SizedBox(height:12),input(name,'Alimento ou refeição'),input(cal,'Calorias (kcal)',num:true),
    Row(children:[Expanded(child:input(prot,'Proteína (g)',num:true)),const SizedBox(width:10),Expanded(child:input(carb,'Hidratos (g)',num:true))]),
    Row(children:[Expanded(child:input(fat,'Gorduras (g)',num:true)),const SizedBox(width:10),Expanded(child:input(sugar,'Açúcares (g)',num:true))]),
@@ -180,12 +185,12 @@ class _SomaState extends State<Soma>{
   }
  }
  Widget input(TextEditingController c,String label,{bool num=false})=>Padding(padding:const EdgeInsets.only(bottom:10),child:TextField(controller:c,keyboardType:num?const TextInputType.numberWithOptions(decimal:true):TextInputType.text,decoration:InputDecoration(labelText:label,filled:true,fillColor:const Color(0xff2b3032),border:OutlineInputBorder(borderRadius:BorderRadius.circular(11),borderSide:BorderSide.none))));
- void aiInfo()=>showModalBottomSheet<void>(context:context,backgroundColor:panel,showDragHandle:true,builder:(c)=>Padding(padding:const EdgeInsets.all(24),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
+ void aiInfo()=>showModalBottomSheet<void>(context:navKey.currentContext!,backgroundColor:panel,showDragHandle:true,builder:(c)=>Padding(padding:const EdgeInsets.all(24),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
  const Icon(Icons.auto_awesome,color:lime,size:35),const SizedBox(height:14),
  const Text('Scanner nutricional',style:TextStyle(fontSize:24,fontWeight:FontWeight.bold,color:white)),const SizedBox(height:10),
  const Text('A integração com ChatGPT e a identificação automática dos alimentos ainda não estão disponíveis nesta versão. Esta versão oferece registo manual, sem inventar resultados de IA.',style:TextStyle(color:muted,height:1.5)),
  const SizedBox(height:20),SizedBox(width:double.infinity,child:FilledButton(onPressed:(){Navigator.pop(c);addMeal();},child:const Text('Registar manualmente'))),const SizedBox(height:12)])));
- @override Widget build(BuildContext context)=>MaterialApp(title:'SŌMA',debugShowCheckedModeBanner:false,theme:ThemeData(useMaterial3:true,brightness:Brightness.dark,scaffoldBackgroundColor:bg,colorScheme:ColorScheme.fromSeed(seedColor:lime,brightness:Brightness.dark),filledButtonTheme:FilledButtonThemeData(style:FilledButton.styleFrom(backgroundColor:lime,foregroundColor:bg,minimumSize:const Size(10,48)))),home:!loaded?const Scaffold(body:Center(child:CircularProgressIndicator())):
+ @override Widget build(BuildContext context)=>MaterialApp(navigatorKey:navKey,title:'SŌMA',debugShowCheckedModeBanner:false,theme:ThemeData(useMaterial3:true,brightness:Brightness.dark,scaffoldBackgroundColor:bg,colorScheme:ColorScheme.fromSeed(seedColor:lime,brightness:Brightness.dark),filledButtonTheme:FilledButtonThemeData(style:FilledButton.styleFrom(backgroundColor:lime,foregroundColor:bg,minimumSize:const Size(10,48)))),home:!loaded?const Scaffold(body:Center(child:CircularProgressIndicator())):
  !configured?SetupPage(onSave:(g,p,e)=>update((){
   objective=g;trainingPlace=p;experience=e;configured=true;
  })):
@@ -235,7 +240,7 @@ class _SomaState extends State<Soma>{
       child:Image.file(File(m['imagePath'] as String),height:150,width:double.infinity,fit:BoxFit.cover)),
   Row(children:[
    Expanded(child:Text(m['name'].toString(),style:const TextStyle(color:white,fontSize:17,fontWeight:FontWeight.bold))),
-   IconButton(tooltip:'Apagar refeição',onPressed:()=>showDialog<void>(context:context,
+   IconButton(tooltip:'Apagar refeição',onPressed:()=>showDialog<void>(context:navKey.currentContext!,
      builder:(dialog)=>AlertDialog(title:const Text('Apagar refeição?'),actions:[
       TextButton(onPressed:()=>Navigator.pop(dialog),child:const Text('Cancelar')),
       FilledButton(onPressed:(){Navigator.pop(dialog);removeMeal(m);},child:const Text('Apagar'))])),
@@ -271,7 +276,7 @@ class _SomaState extends State<Soma>{
  title('Como te sentes?','Registo de humor'),
  pad(Wrap(spacing:7,runSpacing:6,children:['Muito bem','Bem','Cansado','Ansioso','Triste'].map((m)=>ChoiceChip(label:Text(m),selected:mood==m,onSelected:(_)=>recordMood(m))).toList())),
  const SizedBox(height:16),
- pad(action('Respiração guiada','Uma pausa de um minuto para relaxar.','Começar',Icons.spa_outlined,()=>Navigator.of(context).push(MaterialPageRoute(builder:(c)=>const BreathPage())))),
+ pad(action('Respiração guiada','Uma pausa de um minuto para relaxar.','Começar',Icons.spa_outlined,()=>navKey.currentState!.push(MaterialPageRoute(builder:(c)=>const BreathPage())))),
  if(sleeps.isNotEmpty)...[
  title('Histórico de sono',sleeps.length.toString()+' registos'),
  ...sleeps.take(7).map((x)=>pad(Padding(padding:const EdgeInsets.only(bottom:8),
