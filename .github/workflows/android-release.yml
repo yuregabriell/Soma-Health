@@ -1,0 +1,61 @@
+name: Android APK - SŌMA
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android platform
+        run: |
+          flutter create --platforms=android --project-name soma_health --org com.soma.wellbeing .
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('android/app/src/main/AndroidManifest.xml')
+          data = path.read_text()
+          data = data.replace('android:label="soma_health"', 'android:label="SŌMA"')
+          if 'android.permission.INTERNET' not in data:
+              data = data.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+              '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET" />')
+          path.write_text(data)
+          PY
+      - name: Install packages
+        run: flutter pub get
+      - name: Check Flutter code
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Build release APK
+        run: flutter build apk --release
+      - name: Name APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk SOMA-Android-v0.1.0.apk
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SOMA-Android-0.1.0
+          path: SOMA-Android-v0.1.0.apk
+      - name: Publish prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.0
+          target_commitish: main
+          name: SŌMA Android v0.1.0 - Preview
+          prerelease: true
+          generate_release_notes: true
+          body: |
+            Preview experimental e independente do ecossistema Vista.
+            Inclui treinos guiados, registo de agua, alimentacao manual,
+            sono, humor, glicemia manual, peso e IMC.
+            A IA por fotografia ainda nao esta implementada.
+            Os registos ficam no dispositivo e ainda nao possuem cifragem clinica.
+            Esta APK nao se destina a diagnostico ou tratamento.
+          files: SOMA-Android-v0.1.0.apk
