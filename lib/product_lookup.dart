@@ -174,5 +174,4 @@ class _BarcodeState extends State<BarcodePage>{
    const Positioned(bottom:35,left:20,right:20,child:Text('Enquadra o código de barras do produto.',
     textAlign:TextAlign.center,style:TextStyle(color:Colors.white,fontWeight:FontWeight.bold))),
   ]));
- }
 }
