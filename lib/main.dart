@@ -4,6 +4,8 @@ import 'dart:math';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'food_library.dart';
+import 'product_lookup.dart';
+import 'water_reminders.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -80,12 +82,12 @@ class _SomaState extends State<Soma>{
  final navKey=GlobalKey<NavigatorState>();
  int tab=0,water=0,sessions=0,goal=2000;double sleep=7.5,weight=75,height=175;String mood='Bem';bool loaded=false;
  List<Map<String,dynamic>> meals=[],glucose=[],weights=[],workouts=[],moods=[],sleeps=[];
- String objective='Saúde e energia',trainingPlace='Em casa',experience='Iniciante';bool configured=false;
+ String objective='Saúde e energia',trainingPlace='Em casa',experience='Iniciante';bool configured=false,hydrationReminders=false;String waterDate=date();List<Map<String,dynamic>> waterHistory=[];
  @override void initState(){super.initState();load();}
  Future<void> load()async{
   try{final p=await SharedPreferences.getInstance();final m=jsonDecode(p.getString('soma_v1')??'{}') as Map<String,dynamic>;
   if(!mounted)return;setState((){
-    water=m['day']==date()?(m['water'] as num? ??0).toInt():0;goal=(m['goal'] as num? ??2000).toInt();
+    waterDate=m['day'] as String? ??date();water=waterDate==date()?(m['water'] as num? ??0).toInt():0;goal=(m['goal'] as num? ??2000).toInt();
     sleep=value(m['sleep'],7.5);weight=value(m['weight'],75);height=value(m['height'],175);
     sessions=(m['sessions'] as num? ??0).toInt();mood=m['mood'] as String? ??'Bem';
     meals=(m['meals'] as List? ??[]).map((e)=>Map<String,dynamic>.from(e as Map)).toList();
@@ -98,15 +100,19 @@ class _SomaState extends State<Soma>{
     trainingPlace=m['trainingPlace'] as String? ??'Em casa';
     experience=m['experience'] as String? ??'Iniciante';
     configured=m['configured']==true;
+    hydrationReminders=m['hydrationReminders']==true;
+    waterHistory=(m['waterHistory'] as List? ??[]).map((e)=>Map<String,dynamic>.from(e as Map)).toList();
   });}catch(_){}
   if(mounted)setState(()=>loaded=true);
+  if(hydrationReminders){try{await WaterReminderService.instance.refresh();}catch(_){}}
  }
  void update(VoidCallback fn){setState(fn);persist();}
  Future<void> persist()async{final p=await SharedPreferences.getInstance();await p.setString('soma_v1',jsonEncode({
- 'water':water,'day':date(),'goal':goal,'sleep':sleep,'weight':weight,'height':height,
+ 'water':water,'day':waterDate,'goal':goal,'sleep':sleep,'weight':weight,'height':height,
  'sessions':sessions,'mood':mood,'meals':meals,'glucose':glucose,'weights':weights,
  'workouts':workouts,'moods':moods,'sleeps':sleeps,'objective':objective,
- 'trainingPlace':trainingPlace,'experience':experience,'configured':configured}));}
+ 'trainingPlace':trainingPlace,'experience':experience,'configured':configured,
+ 'hydrationReminders':hydrationReminders,'waterHistory':waterHistory}));}
  Future<void> askNumber(String label,String hint,void Function(double) save)async{
   final c=TextEditingController();
   final n=await showDialog<double>(context:navKey.currentContext!,builder:(d)=>AlertDialog(backgroundColor:panel,title:Text(label),content:TextField(controller:c,autofocus:true,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(hintText:hint)),actions:[
@@ -119,6 +125,36 @@ class _SomaState extends State<Soma>{
   update(()=>meals.insert(0,{'name':food.name,'cal':food.kcal,
     'prot':food.protein,'carb':food.carbs,'fat':food.fats,'sugar':food.sugar,
     'day':date(),'source':'offline','time':DateTime.now().toIso8601String()}));
+ }
+
+ Future<void> chooseOnlineFood()async{
+  final ctx=navKey.currentContext;if(ctx==null)return;
+  final result=await Navigator.push<FoodPortion>(ctx,MaterialPageRoute(builder:(_)=>const ProductSearchScreen()));
+  if(result!=null)registerFood(result);
+ }
+ void addWater(int ml){
+  update((){
+   if(waterDate!=date()){waterDate=date();water=0;}
+   water+=ml;
+   waterHistory.removeWhere((x)=>x['day']==waterDate);
+   waterHistory.insert(0,{'day':waterDate,'ml':water});
+  });
+ }
+ Future<void> toggleReminders(bool enabled)async{
+  if(!enabled){
+   try{await WaterReminderService.instance.disable();}catch(_){}
+   update(()=>hydrationReminders=false);return;
+  }
+  try{
+   final ok=await WaterReminderService.instance.enable();
+   if(!mounted)return;
+   update(()=>hydrationReminders=ok);
+   if(!ok)ScaffoldMessenger.of(navKey.currentContext!).showSnackBar(
+    const SnackBar(content:Text('Autoriza as notificações do SŌMA nas definições.')));
+  }catch(_){
+   if(mounted)ScaffoldMessenger.of(navKey.currentContext!).showSnackBar(
+    const SnackBar(content:Text('Não foi possível agendar os lembretes neste dispositivo.')));
+  }
  }
  Future<void> chooseFood()async{
   final food=await Navigator.push<FoodPortion>(navKey.currentContext!,MaterialPageRoute(builder:(_)=>const FoodPicker()));
