@@ -11,7 +11,7 @@ class WaterReminderService {
   bool initialized=false;
   static const details=NotificationDetails(
     android:AndroidNotificationDetails(
-      'soma_hydration','Hidratação','Lembretes de ingestão de água',
+      'soma_hydration','Hidratação',channelDescription:'Lembretes de ingestão de água',
       importance:Importance.defaultImportance,
       priority:Priority.defaultPriority,
       playSound:true,
