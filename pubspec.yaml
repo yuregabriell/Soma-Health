@@ -1,7 +1,7 @@
 name: soma_health
 description: SŌMA - treino, alimentacao e bem-estar (preview independente)
 publish_to: none
-version: 0.2.0+2
+version: 0.3.0+3
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -12,6 +12,10 @@ dependencies:
   shared_preferences: ^2.3.3
   image_picker: ^1.1.2
   path_provider: ^2.1.5
+  http: ^1.5.0
+  mobile_scanner: ^7.4.2
+  flutter_local_notifications: ^19.5.0
+  timezone: ^0.10.1
 
 dev_dependencies:
   flutter_test:
