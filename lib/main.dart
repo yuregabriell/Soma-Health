@@ -263,10 +263,18 @@ class _SomaState extends State<Soma>{
  return ListView(children:[
  heading('NUTRIÇÃO','Começa por te conhecer.'),
  feature('DIÁRIO DE REFEIÇÕES','Alimenta o teu potencial','Acompanhar calorias e nutrientes','https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=900',addMeal),
- title('Hoje','Registos manuais'),
- pad(Wrap(spacing:10,runSpacing:10,children:[metric('ENERGIA',sum('cal').round().toString()+' kcal',Icons.local_fire_department_outlined),metric('PROTEÍNA',sum('prot').toStringAsFixed(1)+' g',Icons.egg_outlined)])),
+ title('Hoje','Diário alimentar'),
+ pad(Wrap(spacing:9,runSpacing:9,children:[
+  metric('ENERGIA',sum('cal').round().toString()+' kcal',Icons.local_fire_department_outlined),
+  metric('PROTEÍNA',sum('prot').toStringAsFixed(1)+' g',Icons.egg_outlined),
+  metric('HIDRATOS',sum('carb').toStringAsFixed(1)+' g',Icons.grain),
+  metric('AÇÚCARES',sum('sugar').toStringAsFixed(1)+' g',Icons.cookie_outlined),
+  metric('GORDURAS',sum('fat').toStringAsFixed(1)+' g',Icons.opacity_outlined)])),
  title('Refeições',t.length.toString()+' registadas'),
- pad(FilledButton.icon(onPressed:chooseFood,icon:const Icon(Icons.search),label:const Text('Escolher alimento e porção'))),
+ pad(FilledButton.icon(onPressed:chooseOnlineFood,icon:const Icon(Icons.qr_code_scanner),label:const Text('Produtos e códigos de barras'))),
+ const SizedBox(height:9),
+ pad(OutlinedButton.icon(onPressed:chooseFood,icon:const Icon(Icons.offline_bolt_outlined),
+  label:const Text('Biblioteca de alimentos offline'))),
  const SizedBox(height:12),
  if(t.isEmpty)pad(action('Ainda não registaste refeições','Adiciona os ingredientes e as quantidades manualmente.','Adicionar',Icons.restaurant,addMeal)),
  ...t.map((m)=>Padding(padding:const EdgeInsets.fromLTRB(20,0,20,9),
@@ -300,13 +308,25 @@ class _SomaState extends State<Soma>{
    return Expanded(child: Padding(
      padding: const EdgeInsets.only(right: 5),
      child: OutlinedButton(
-       onPressed: () => update(() => water += x),
+       onPressed: () => addWater(x),
        child: Text('+' + x.toString(), style: const TextStyle(fontSize: 12)),
      ),
    ));
  }).toList()),
+ SwitchListTile.adaptive(value:hydrationReminders,
+   onChanged:toggleReminders,
+   title:const Text('Lembretes de hidratação',style:TextStyle(color:white)),
+   subtitle:const Text('Avisos locais 5 vezes por dia; reagendados ao abrir.',style:TextStyle(color:muted,fontSize:12))),
  TextButton(onPressed:()=>askNumber('Meta diária de água','Mililitros',(x)=>update(()=>goal=x.round())),child:const Text('Alterar meta'))
  ]))),
+ if(waterHistory.isNotEmpty)...[
+  title('Histórico de água',waterHistory.length.toString()+' dias'),
+  ...waterHistory.take(7).map((x)=>pad(Padding(padding:const EdgeInsets.only(bottom:8),
+    child:tile(Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+      Text(x['day'].toString(),style:const TextStyle(color:muted)),
+      Text(x['ml'].toString()+' ml',style:const TextStyle(color:white)),
+    ]))))),
+ ],
  title('Sono','Última noite'),
  pad(tile(Column(children:[Text(sleep.toStringAsFixed(1)+' horas',style:const TextStyle(color:white,fontSize:22)),Slider(value:sleep.clamp(3,12),min:3,max:12,divisions:18,onChanged:(x)=>setState(()=>sleep=x),onChangeEnd:recordSleep)]))),
  title('Como te sentes?','Registo de humor'),
