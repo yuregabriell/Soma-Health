@@ -1,14 +1,14 @@
 name: Android APK - SŌMA
 on:
   push:
-    branches: [main]
+    branches: [main, feature/nutrition-and-reminders-v03]
   workflow_dispatch:
 permissions:
   contents: write
 jobs:
   android:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -17,46 +17,80 @@ jobs:
         with:
           channel: stable
           cache: true
-      - name: Generate Android platform
+      - name: Generate Android platform and configure permissions
         run: |
           flutter create --platforms=android --project-name soma_health --org com.soma.wellbeing .
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('android/app/src/main/AndroidManifest.xml')
-          data = path.read_text()
-          data = data.replace('android:label="soma_health"', 'android:label="SŌMA"')
-          if 'android.permission.INTERNET' not in data:
-              data = data.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
-              '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET" />')
-          path.write_text(data)
+          p=Path('android/app/src/main/AndroidManifest.xml')
+          text=p.read_text().replace('android:label="soma_health"','android:label="SŌMA"')
+          prefix='<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          perms=[
+            'android.permission.INTERNET',
+            'android.permission.CAMERA',
+            'android.permission.POST_NOTIFICATIONS',
+            'android.permission.RECEIVE_BOOT_COMPLETED',
+          ]
+          for name in perms:
+              if name not in text:
+                  text=text.replace(prefix,prefix+'\n    <uses-permission android:name="'+name+'" />')
+          receivers='''
+                  <receiver android:exported="false"
+                      android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+                  <receiver android:exported="false"
+                      android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+                      <intent-filter>
+                          <action android:name="android.intent.action.BOOT_COMPLETED" />
+                          <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                          <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                          <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                      </intent-filter>
+                  </receiver>
+          '''
+          if 'ScheduledNotificationReceiver' not in text:
+              text=text.replace('</application>',receivers+'</application>')
+          p.write_text(text)
+          gradle=Path('android/app/build.gradle.kts')
+          if gradle.exists():
+              script=gradle.read_text()
+              script=script.replace('compileOptions {','compileOptions {\n        isCoreLibraryDesugaringEnabled = true',1)
+              if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs' not in script:
+                  script+='\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+              gradle.write_text(script)
           PY
           rm -f test/widget_test.dart analysis_options.yaml
       - name: Install packages
         run: flutter pub get
-      - name: Check Flutter code
+      - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
-      - name: Build release APK
+      - name: Test nutrition calculations
+        run: flutter test test/nutrition_test.dart
+      - name: Build APK
         run: flutter build apk --release
       - name: Name APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk SOMA-Android-v0.2.0.apk
-      - name: Upload build artifact
+        run: cp build/app/outputs/flutter-apk/app-release.apk SOMA-Android-v0.3.0.apk
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SOMA-Android-0.2.0
-          path: SOMA-Android-v0.2.0.apk
+          name: SOMA-Android-0.3.0
+          path: SOMA-Android-v0.3.0.apk
       - name: Publish prerelease
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.2.0
+          tag_name: v0.3.0
           target_commitish: main
-          name: SŌMA Android v0.2.0 - Beta
+          name: SŌMA Android v0.3.0 - Nutrition Beta
           prerelease: true
           generate_release_notes: true
           body: |
-            Preview experimental e independente do ecossistema Vista.
-            Inclui onboarding, biblioteca alimentar offline, fotografias de refeicoes, historico de sono, humor e treino, registo de agua, alimentacao manual,
-            sono, humor, glicemia manual, peso e IMC.
-            A IA por fotografia ainda nao esta implementada.
-            Os registos ficam no dispositivo e ainda nao possuem cifragem clinica.
-            Esta APK nao se destina a diagnostico ou tratamento.
-          files: SOMA-Android-v0.2.0.apk
+            SŌMA v0.3.0 beta: catálogo nutricional online (Open Food Facts),
+            leitura de código de barras, biblioteca offline, macro e açúcar,
+            histórico de hidratação e lembretes locais opt-in.
+            IMPORTANTE: scanner fotográfico por IA/ChatGPT não está ligado.
+            Os valores nutricionais são estimados; confirma a embalagem.
+            Os lembretes são agendados por 21 dias e renovados ao abrir o app.
+            Esta beta ainda guarda dados localmente sem encriptação dedicada.
+            A assinatura Android de distribuição ainda não é estável;
+            atualizações podem exigir reinstalação e perder dados locais.
+          files: SOMA-Android-v0.3.0.apk
